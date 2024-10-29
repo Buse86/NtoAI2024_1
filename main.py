@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import f1_score
 from PIL import Image
+import pandas as pd
 
 seed = 42
 torch.manual_seed(seed)
