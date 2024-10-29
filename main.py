@@ -5,7 +5,7 @@ import torchvision.transforms as transforms
 from torchvision.datasets import ImageFolder
 from torch.utils.data import DataLoader
 import torch.optim as optim
-
+import os
 from tqdm import tqdm
 import random
 import numpy as np
@@ -25,15 +25,15 @@ torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.deterministic = True
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-model = models.resnet18(pretrained=True)
+print(device)
+model = models.resnet(pretrained=True)
 
 # Заменим последний слой (fully connected) так, чтобы количество выходных каналов соответствовало 3 классам
 num_classes = 10
 model.fc = nn.Linear(model.fc.in_features, num_classes)
 
 train_data_dir = 'train2'
-val_data_dir = 'test'
+val_data_dir = 'test22'
 
 # Определим трансформации
 train_transforms = transforms.Compose([
@@ -51,7 +51,7 @@ train_dataset = ImageFolder(train_data_dir, transform=train_transforms)
 val_dataset = ImageFolder(val_data_dir, transform=val_transforms)
 
 # Создадим датагенераторы
-batch_size = 64
+batch_size = 500
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
@@ -62,7 +62,7 @@ criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.0005)
 
 # число эпох
-num_epochs = 70
+num_epochs = 50
 
 train_losses = []
 train_accuracies = []
@@ -130,3 +130,48 @@ for epoch in range(num_epochs):
     print()
 
 print('Training and validation complete!')
+
+ans = pd.DataFrame(columns=['image_name', 'predicted_class'])
+
+# Загрузим предварительно обученную модель ResNet18
+model = models.resnet18()
+# Заменим последний слой (fully connected) так, чтобы количество выходных каналов соответствовало 3 классам
+num_classes = 10
+model.fc = nn.Linear(model.fc.in_features, num_classes)
+
+# Загрузка весов модели
+model.load_state_dict(torch.load('last_model.pth'))
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+model.to(device)
+model.eval()
+class_names = ['Заяц', 'Кабан', 'Кошки',  'Куньи', 'Медведь', 'Оленевые', 'Пантеры', 'Полорогие', 'Собачие', 'Сурок']
+preprocess = transforms.Compose([
+    transforms.Resize(256),
+    transforms.CenterCrop(224),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+])
+
+idx = 0
+
+for file in os.listdir('test'):
+    image_path = f'test/{file}'
+    image = Image.open(image_path)
+    image_tensor = preprocess(image)
+    image_tensor = image_tensor.unsqueeze(0).to(device)
+
+    with torch.no_grad():
+        output = model(image_tensor)
+        probabilities = torch.nn.functional.softmax(output[0], dim=0).cpu()
+        top_prob, top_class = torch.topk(probabilities, 1)
+        top_prob = top_prob.item()
+        top_class = top_class.item()
+
+        # class_name = class_names[top_class]
+        print(top_class)
+        ans.loc[idx] = [file, top_class]
+        idx += 1
+
+
+ans.to_csv('answer3.csv', index=False)
+print('sucsses')
