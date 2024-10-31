@@ -22,12 +22,15 @@ torch.cuda.manual_seed(seed)
 torch.cuda.manual_seed_all(seed)
 np.random.seed(seed)
 random.seed(seed)
-torch.backends.cudnn.benchmark = False
-torch.backends.cudnn.deterministic = True
-
+# torch.backends.cudnn.benchmark = False
+# torch.backends.cudnn.deterministic = True
+# data_count = [915, 1964, 930, 747, 2394, 11019, 4282, 1882, 1766, 720]
+# data_weight = [d/len(data_count) for d in data_count]
+# data_weight_tensor = torch.FloatTensor(data_weight).cuda()
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
-model = models.resnet(pretrained=True)
+
+model = models.resnet34(pretrained=True)
 
 # Заменим последний слой (fully connected) так, чтобы количество выходных каналов соответствовало 3 классам
 num_classes = 10
@@ -52,7 +55,7 @@ train_dataset = ImageFolder(train_data_dir, transform=train_transforms)
 val_dataset = ImageFolder(val_data_dir, transform=val_transforms)
 
 # Создадим датагенераторы
-batch_size = 500
+batch_size = 64
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
@@ -123,7 +126,7 @@ for epoch in range(num_epochs):
     # Сохранение лучшей модели на основе валидационной точности
     if val_accuracy > best_val_accuracy:
         best_val_accuracy = val_accuracy
-        torch.save(model.state_dict(), 'best_model.pth')
+        torch.save(model.state_dict(), 'best_model1.pth')
         print('Saved best model!')
 
     # Сохранение последней актуальной модели
@@ -132,47 +135,50 @@ for epoch in range(num_epochs):
 
 print('Training and validation complete!')
 
-ans = pd.DataFrame(columns=['image_name', 'predicted_class'])
+f = False
 
-# Загрузим предварительно обученную модель ResNet18
-model = models.resnet18()
-# Заменим последний слой (fully connected) так, чтобы количество выходных каналов соответствовало 3 классам
-num_classes = 10
-model.fc = nn.Linear(model.fc.in_features, num_classes)
+if f:
+    ans = pd.DataFrame(columns=['image_name', 'predicted_class'])
 
-# Загрузка весов модели
-model.load_state_dict(torch.load('last_model.pth'))
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model.to(device)
-model.eval()
-class_names = ['Заяц', 'Кабан', 'Кошки',  'Куньи', 'Медведь', 'Оленевые', 'Пантеры', 'Полорогие', 'Собачие', 'Сурок']
-preprocess = transforms.Compose([
-    transforms.Resize(256),
-    transforms.CenterCrop(224),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-])
+    # Загрузим предварительно обученную модель ResNet18
+    model = models.resnet18()
+    # Заменим последний слой (fully connected) так, чтобы количество выходных каналов соответствовало 3 классам
+    num_classes = 10
+    model.fc = nn.Linear(model.fc.in_features, num_classes)
 
-idx = 0
+    # Загрузка весов модели
+    model.load_state_dict(torch.load('last_model.pth'))
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model.to(device)
+    model.eval()
+    class_names = ['Заяц', 'Кабан', 'Кошки',  'Куньи', 'Медведь', 'Оленевые', 'Пантеры', 'Полорогие', 'Собачие', 'Сурок']
+    preprocess = transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
 
-for file in os.listdir('test'):
-    image_path = f'test/{file}'
-    image = Image.open(image_path)
-    image_tensor = preprocess(image)
-    image_tensor = image_tensor.unsqueeze(0).to(device)
+    idx = 0
 
-    with torch.no_grad():
-        output = model(image_tensor)
-        probabilities = torch.nn.functional.softmax(output[0], dim=0).cpu()
-        top_prob, top_class = torch.topk(probabilities, 1)
-        top_prob = top_prob.item()
-        top_class = top_class.item()
+    for file in os.listdir('test'):
+        image_path = f'test/{file}'
+        image = Image.open(image_path)
+        image_tensor = preprocess(image)
+        image_tensor = image_tensor.unsqueeze(0).to(device)
 
-        # class_name = class_names[top_class]
-        print(top_class)
-        ans.loc[idx] = [file, top_class]
-        idx += 1
+        with torch.no_grad():
+            output = model(image_tensor)
+            probabilities = torch.nn.functional.softmax(output[0], dim=0).cpu()
+            top_prob, top_class = torch.topk(probabilities, 1)
+            top_prob = top_prob.item()
+            top_class = top_class.item()
+
+            # class_name = class_names[top_class]
+            print(top_class)
+            ans.loc[idx] = [file, top_class]
+            idx += 1
 
 
-ans.to_csv('answer3.csv', index=False)
-print('sucsses')
+    ans.to_csv('answer3.csv', index=False)
+    print('sucsses')
